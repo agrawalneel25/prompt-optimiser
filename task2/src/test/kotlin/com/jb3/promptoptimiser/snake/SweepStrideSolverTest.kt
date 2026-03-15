@@ -101,36 +101,42 @@ class SweepStrideSolverTest {
         }
     }
 
-    // ── stride-1 guarantee ───────────────────────────────────────────────────
+    // ── coprime boards: stride-1 is proved to cover all cells ────────────────
 
-    // With maxStrides=1, only the stride-1 phase runs. This is the proved
-    // ≤ 2S guarantee: the (RIGHT, DOWN) sweep with stride 1 visits every cell
-    // of any A×B torus because gcd(1, A) = 1 always holds.
+    // When gcd(A, B) = 1, the diagonal macro-step (+1, +1) generates an orbit
+    // of size lcm(A, B) = A·B, so all cells are visited. This IS a proved
+    // guarantee — but only for coprime board dimensions.
+    //
+    // For non-coprime boards (e.g. 3×3, 4×4) the orbit is smaller than A·B
+    // and a single diagonal phase does not cover all cells. The full solver
+    // still works heuristically via multiple phases and strides, but there is
+    // no clean proof for non-coprime boards.
 
     @Test
-    fun `stride-1-only solver wins on all boards in the exhaustive small-board set`() {
+    fun `stride-1-only solver covers all cells on coprime-dimension boards`() {
         val stride1Solver = SweepStrideSolver(maxStrides = 1)
-        // All boards up to area 50: every (w, h) with w*h ≤ 50
-        for (w in 1..50) {
-            for (h in 1..(50 / w)) {
-                for (ax in 0 until w) for (ay in 0 until h) {
-                    val config = BoardConfig(w, h, Point(0, 0), Point(ax, ay))
-                    val result = runSimulation(stride1Solver, config)
-                    assertTrue(result.withinBudget,
-                        "stride-1 failed on ${w}×${h} apple=($ax,$ay): ${result.run.stepsUsed}/${config.budgetLimit}")
-                }
+        // Only coprime pairs: gcd(w, h) = 1
+        val coprimePairs = listOf(1 to 7, 7 to 1, 3 to 7, 7 to 11, 13 to 17, 1 to 999)
+        for ((w, h) in coprimePairs) {
+            for (ax in 0 until w) for (ay in 0 until h) {
+                val config = BoardConfig(w, h, Point(0, 0), Point(ax, ay))
+                val result = runSimulation(stride1Solver, config)
+                assertTrue(result.withinBudget,
+                    "stride-1 failed on coprime ${w}×${h} apple=($ax,$ay)")
             }
         }
     }
 
     @Test
-    fun `stride-1-only solver uses at most 2S steps on any board`() {
+    fun `stride-1-only solver uses at most 2S steps on coprime boards`() {
+        // For coprime (A,B): lcm(A,B) = A·B, so the diagonal phase covers
+        // all S cells in exactly S macro-steps = 2S individual moves.
         val stride1Solver = SweepStrideSolver(maxStrides = 1)
         val boards = listOf(
-            BoardConfig(1, 1000, Point(0, 0), Point(0, 999)),
-            BoardConfig(1000, 1, Point(0, 0), Point(999, 0)),
-            BoardConfig(100, 100, Point(0, 0), Point(99, 99)),
-            BoardConfig(7, 11, Point(0, 0), Point(6, 10)),
+            BoardConfig(1,    1000, Point(0, 0), Point(0, 999)),   // gcd=1
+            BoardConfig(1000, 1,    Point(0, 0), Point(999, 0)),   // gcd=1
+            BoardConfig(7,    11,   Point(0, 0), Point(6, 10)),    // gcd=1
+            BoardConfig(13,   17,   Point(0, 0), Point(12, 16)),   // gcd=1
         )
         for (config in boards) {
             val result = runSimulation(stride1Solver, config)

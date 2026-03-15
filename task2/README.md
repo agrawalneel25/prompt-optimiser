@@ -58,23 +58,34 @@ on thin boards.
 
 ---
 
-### SweepStrideSolver — repeated torus sweeps
+### SweepStrideSolver — diagonal torus sweeps (heuristic)
 
 Repeats the macro-step `(RIGHT^m, DOWN)` for stride m = 1, 2, 3, …:
 move right m times, then step down once, and repeat.
 
-**Why stride 1 covers everything:**
-With m=1, each macro-step is `(RIGHT, DOWN)`. On an A×B torus, this traces a
-diagonal path. After A·B macro-steps (= 2·A·B individual moves) the path
-visits every cell, because gcd(1, A) = 1 always holds — the stride of 1 is
-coprime with any width. This gives a proved upper bound of 2S ≤ 35S for all
-board shapes.
+Each macro-step moves the snake by offset `(+m, +1)` on the torus. The orbit
+of this offset in Z_A × Z_B has size `lcm(A / gcd(m, A), B)`. For this orbit
+to cover all A·B cells, the condition is:
+
+```
+lcm(A / gcd(m, A),  B)  =  A·B
+```
+
+For stride m=1 this becomes `lcm(A, B) = A·B`, which holds **only when
+`gcd(A, B) = 1`**. For example, on a 3×3 board the stride-1 diagonal visits
+only 3 of 9 cells and cycles back to the start.
+
+**Proved guarantee (coprime boards only):** when `gcd(A, B) = 1`, stride 1
+covers all S cells in exactly 2S moves.
+
+**Heuristic for all other boards:** multiple phases across different strides
+and orientations (H and V) tend to find the apple in practice, but no clean
+proof covers the non-coprime case. Use [BoustrophedonSolver] for a strategy
+with a proof that applies to all board shapes.
 
 **Why multiple strides?**
-Higher strides (m = 2, 3, …) are tried as a heuristic: on boards where the
-stride happens to be coprime with A, the apple may be found in fewer total
-steps. These phases are bounded so they do not break the overall 2S guarantee
-if stride 1 completes first.
+Higher strides may find the apple faster when the stride happens to be coprime
+with A, but they are not needed for correctness even on coprime boards.
 
 **Both orientations:**
 Two sweep phases are interleaved — horizontal-first `(RIGHT^m, DOWN)` and
@@ -89,8 +100,12 @@ symmetrically.
 
 | Claim | Status |
 |---|---|
-| SweepStride stride-1 covers any A×B board in ≤ 2S moves | **Proved** |
-| SweepStride multi-stride finds apple faster on some boards | Heuristic — not proved |
+| Boustrophedon covers any A×B board when w ≥ A and h ≥ B | **Proved** |
+| Boustrophedon enumeration reaches a covering (w,h) for any board | **Proved** |
+| Boustrophedon total steps within 35S for all boards | Near-certain for S < 10⁶; not a formal proof (see step-count analysis in code) |
+| SweepStride stride-1 covers all cells when gcd(A, B) = 1 | **Proved** |
+| SweepStride stride-1 covers all cells when gcd(A, B) > 1 | **False** — diagonal orbit is smaller than A·B |
+| SweepStride finds the apple on any board (multi-phase heuristic) | Heuristic — no clean proof for non-coprime boards |
 | Baseline covers square boards (A ≈ B) within 35S budget | **Proved** for A = B |
 | Baseline covers thin boards (1×S) within 35S budget | **False** — known failure case |
 
@@ -179,14 +194,13 @@ does not depend on them.
 
 ### 5. Boustrophedon (zig-zag) sweep
 
-An alternative framing of the same idea is a boustrophedon traversal: sweep
-left-to-right along row 0, step down, sweep right-to-left along row 1, step
-down, and so on. This is equivalent to alternating-direction stride-1 sweeps
-and would visit every cell in at most 2S moves for the same reason. The
-current implementation uses unidirectional sweeps (always RIGHT, always DOWN)
-for simplicity; a boustrophedon variant would achieve the same asymptotic
-bound and might halve the constant in practice by eliminating backtracking
-at row boundaries.
+The implementation is named "boustrophedon" because the core idea — sweep a
+row, advance, sweep the next row — mirrors that pattern. However, a true
+alternating zig-zag (RIGHT on even rows, LEFT on odd rows) is not directly
+usable here: you would need to know A to know when to reverse direction.
+Since A is unknown, the solver instead sweeps RIGHT `w` times with a guessed
+`w ≥ A`, relying on torus wrapping to ensure every column is hit regardless
+of the exact value of A. The direction never needs to reverse.
 
 ---
 
