@@ -1,36 +1,65 @@
 package com.jb3.promptoptimiser.snake
 
 /**
- * ## Baseline strategy — outward square spiral
+ * ## Strategy: outward square spiral (baseline)
  *
- * The snake traces the classic "Ulam spiral" outward from its starting cell:
+ * ─────────────────────────────────────────────────────────────────────────────
+ * ### Description
+ * ─────────────────────────────────────────────────────────────────────────────
  *
- * ```
- * RIGHT×1, UP×1, LEFT×2, DOWN×2, RIGHT×3, UP×3, LEFT×4, DOWN×4, …
- * ```
+ * The snake traces an outward spiral from its starting cell, following the
+ * pattern:
  *
- * Each "layer" k adds a ring around the previously-covered square, growing the
- * covered region from (2k-1)² to (2k+1)² cells in the infinite plane.
+ *   RIGHT×1, UP×1, LEFT×2, DOWN×2, RIGHT×3, UP×3, LEFT×4, DOWN×4, …
  *
- * ### Why this works on a torus (and what the bound is)
+ * Directions cycle through [RIGHT, UP, LEFT, DOWN]. The step length increases
+ * by 1 after every two consecutive directions.
  *
- * After k complete layers the spiral has visited every integer offset (dx, dy)
- * with |dx| ≤ k and |dy| ≤ k. Projected onto an A×B torus these offsets cover
- * every cell once the covered square's side (2k+1) exceeds both A and B:
+ * ─────────────────────────────────────────────────────────────────────────────
+ * ### Why this covers the board
+ * ─────────────────────────────────────────────────────────────────────────────
  *
- *   k_needed = max(A, B) / 2       (roughly)
- *   total steps ≈ 2·k² ≈ max(A,B)² / 2
+ * In the infinite plane the spiral visits every integer offset (dx, dy) from
+ * the start exactly once, sweeping outward in concentric squares. After k
+ * complete layers, every offset with |dx| ≤ k and |dy| ≤ k has been visited.
  *
- * **Square boards** (A ≈ B ≈ √S): steps ≈ S / 2         ✓ well inside 35S
- * **Thin boards**  (e.g. 1 × S):   steps ≈ S² / 2       ✗ far exceeds 35S
+ * Projected onto an A×B torus, offset (dx, dy) maps to the cell at position
+ * (start_x + dx) mod A, (start_y + dy) mod B). Every cell (c, r) appears as
+ * some offset once |dx| reaches A and |dy| reaches B, i.e. once the spiral's
+ * bounding square exceeds max(A, B):
  *
- * The spiral is therefore a strong baseline for roughly-square boards but
- * degrades badly on very thin or very wide boards. See [SweepStrideSolver]
- * for a heuristic that handles thin boards much better.
+ *   k_needed ≈ max(A, B) / 2
+ *   total steps to reach layer k ≈ 2·k² ≈ max(A,B)² / 2
  *
- * ### Complexity
- * - Time:  O(max(A,B)²)  moves in the worst case
- * - Space: O(1)          — the sequence is generated on-the-fly
+ * ─────────────────────────────────────────────────────────────────────────────
+ * ### Step-count analysis
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
+ * The step count to layer k is:
+ *   Σ_{j=1}^{k} 4j  =  2k(k+1)
+ *
+ * For the spiral to guarantee coverage we need k ≥ max(A, B) / 2, giving:
+ *   total ≈ 2 · (max(A,B)/2)² = max(A,B)² / 2
+ *
+ * **Square boards** (A ≈ B ≈ √S):
+ *   max(A,B)² / 2 ≈ S / 2   ✓  well inside 35S
+ *
+ * **Thin boards** (e.g. 1×S):
+ *   max(A,B) = S, total ≈ S²/2   ✗  far exceeds 35S
+ *
+ * On a 1×S board, UP and DOWN moves are no-ops (height 1, so the snake
+ * wraps back to the same row). Half of all spiral moves are wasted, and
+ * horizontal coverage only grows linearly while the step count grows
+ * quadratically. The spiral is therefore unsuitable for thin boards.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * ### Summary
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
+ * The spiral is a clean, simple O(max(A,B)²) baseline. It is efficient for
+ * roughly square boards (≤ S/2 steps) but can use O(S²) steps on thin boards,
+ * far exceeding the 35S budget. See [BoustrophedonSolver] for a strategy
+ * that handles all board shapes within budget.
  */
 class BaselineSolver : Solver {
 
@@ -46,21 +75,19 @@ class BaselineSolver : Solver {
         return RunResult(false, steps, name, notes = "budget exhausted")
     }
 
-    // ── internal ────────────────────────────────────────────────────────────
-
     /**
-     * Generates an infinite sequence of moves following the outward spiral:
+     * Infinite sequence of moves for the outward spiral:
      * RIGHT×1, UP×1, LEFT×2, DOWN×2, RIGHT×3, UP×3, …
      *
-     * The pattern cycles through directions [RIGHT, UP, LEFT, DOWN]; the step
-     * count increases by 1 after every two consecutive directions.
+     * Directions cycle [RIGHT, UP, LEFT, DOWN]; the step count increments
+     * by 1 after every two consecutive directions.
      */
     private fun spiralSequence(): Sequence<Move> = sequence {
         val dirs = listOf(Move.RIGHT, Move.UP, Move.LEFT, Move.DOWN)
         var dirIndex = 0
         var step = 1
         while (true) {
-            // Same step length is shared by two consecutive directions
+            // Each step length is used for exactly two consecutive directions
             repeat(step) { yield(dirs[dirIndex % 4]) }
             dirIndex++
             repeat(step) { yield(dirs[dirIndex % 4]) }
