@@ -1,5 +1,5 @@
 # Task 2 — Blind Snake on a Torus
-
+Hi JB team - this is AI written, but it's been revised!
 ## Problem
 
 A snake occupies a single cell on an A×B board that wraps on all four edges
